@@ -33,10 +33,10 @@ func test_list() {
 	podLister := factory.Core().V1().Pods().Lister()
 	informer := factory.Core().V1().Pods().Informer()
 
-	// 4. start factory
+	// 4. start factory, start的本质是调用了go informer.Run(stopCh)
 	factory.Start(stopCh)
 
-	// 5. wait cache sync inform
+	// 5. wait cache sync inform, 可以用来wait多个inform的cache sync
 	if !cache.WaitForCacheSync(stopCh, informer.HasSynced) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
 		return
@@ -62,16 +62,19 @@ func test_list() {
 
 func test_inform() {
 	log.Print("Starting the shared informed app")
-	config, err := clientcmd.BuildConfigFromFlags("", "/Users/.../.kube/config")
+	config, err := clientcmd.BuildConfigFromFlags("", "/Users/tingshuai.yts/.kube/config.new-ai-studio")
 	if err != nil {
 		log.Panic(err.Error())
 	}
+	// 1. create go client
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Panic(err.Error())
 	}
-
+	// 2. create factory
 	factory := informers.NewSharedInformerFactory(clientset, 0)
+
+	// 3. create informer
 	informer := factory.Core().V1().Pods().Informer()
 	stopper := make(chan struct{})
 	defer close(stopper)
@@ -80,11 +83,17 @@ func test_inform() {
 		AddFunc:    onAdd,
 		DeleteFunc: onDelete,
 	})
+
+	// 4. start informer
 	go informer.Run(stopper)
+
+	// 5. wait cache
 	if !cache.WaitForCacheSync(stopper, informer.HasSynced) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
 		return
 	}
+
+	// 6. hang for channel
 	<-stopper
 }
 
@@ -105,5 +114,5 @@ func onDelete(obj interface{}) {
 	fmt.Println("Pod deleted -> ", podName)
 }
 func main() {
-	test_list()
+	test_inform()
 }
